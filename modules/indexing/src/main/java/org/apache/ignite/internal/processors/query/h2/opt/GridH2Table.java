@@ -40,6 +40,9 @@ import java.util.concurrent.locks.*;
  */
 public class GridH2Table extends TableBase {
     /** */
+    private static final long MAX_LOCK_ATTEMPT_TIME = 30_000;
+
+    /** */
     private final String spaceName;
 
     /** */
@@ -207,6 +210,9 @@ public class GridH2Table extends TableBase {
             catch (InterruptedException e) {
                 throw new IgniteException("Thread got interrupted while trying to acquire index lock.", e);
             }
+
+            if (waitTime > MAX_LOCK_ATTEMPT_TIME)
+                throw new IgniteException("Failed to lock table: " + getName());
         }
 
         boolean snapshoted = false;

@@ -254,8 +254,8 @@ public class GridH2KeyValueRowOffheap extends GridH2AbstractKeyValueRow {
     }
 
     /** {@inheritDoc} */
-    @Override protected synchronized Value syncValue() {
-        Value v = super.syncValue();
+    @Override protected synchronized Value syncValue(int attempt) {
+        Value v = super.syncValue(attempt);
 
         if (v != null)
             return v;

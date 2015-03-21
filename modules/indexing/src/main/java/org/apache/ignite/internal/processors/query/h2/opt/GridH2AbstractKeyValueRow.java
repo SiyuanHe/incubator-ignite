@@ -176,6 +176,8 @@ public abstract class GridH2AbstractKeyValueRow extends GridH2Row {
      */
     public synchronized void onUnswap(Object val) throws IgniteCheckedException {
         setValue(VAL_COL, wrap(val, desc.valueType()));
+
+        notifyAll();
     }
 
     /**
@@ -193,14 +195,30 @@ public abstract class GridH2AbstractKeyValueRow extends GridH2Row {
 
         setValue(VAL_COL, new WeakValue(upd));
 
+        notifyAll();
+
         return exp;
     }
 
     /**
+     * @param attempt Attempt.
      * @return Synchronized value.
      */
-    protected synchronized Value syncValue() {
-        return super.getValue(VAL_COL);
+    protected synchronized Value syncValue(int attempt) {
+        Value v = super.getValue(VAL_COL);
+
+        if (v == null && attempt != 0) {
+            try {
+                wait(attempt);
+            }
+            catch (InterruptedException e) {
+                throw new IgniteException(e);
+            }
+
+            v = super.getValue(VAL_COL);
+        }
+
+        return v;
     }
 
     /** {@inheritDoc} */
@@ -209,6 +227,8 @@ public abstract class GridH2AbstractKeyValueRow extends GridH2Row {
             Value v = super.getValue(col);
 
             if (col == VAL_COL) {
+                int attempt = 0;
+
                 while ((v = WeakValue.unwrap(v)) == null) {
                     v = getOffheapValue(VAL_COL);
 
@@ -240,12 +260,16 @@ public abstract class GridH2AbstractKeyValueRow extends GridH2Row {
                         }
                         else {
                             // If nothing found in swap then we should be already unswapped.
-                            v = syncValue();
+                            v = syncValue(attempt);
                         }
                     }
                     catch (IgniteCheckedException e) {
                         throw new IgniteException(e);
                     }
+
+                    if (attempt++ == 300) // wait 45 sec in syncValue
+                        throw new IgniteException("Failed to get cache value from offheap or swap for key: " +
+                            getValue(KEY_COL).getObject());
                 }
             }
 
@@ -254,7 +278,7 @@ public abstract class GridH2AbstractKeyValueRow extends GridH2Row {
 
                 v = getOffheapValue(KEY_COL);
 
-                assert v != null : v;
+                assert v != null;
 
                 setValue(KEY_COL, v);
 
