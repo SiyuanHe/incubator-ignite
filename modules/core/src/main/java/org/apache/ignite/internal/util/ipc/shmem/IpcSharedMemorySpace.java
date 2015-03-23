@@ -87,6 +87,8 @@ public class IpcSharedMemorySpace implements Closeable {
 
         opSize = size;
 
+        U.dumpStack(log, "Allocate [tok=" + tokFileName + ", size=" + size + ']');
+
         shmemPtr = IpcSharedMemoryUtils.allocateSystemResources(tokFileName, size, DEBUG && log.isDebugEnabled());
 
         shmemId = IpcSharedMemoryUtils.sharedMemoryId(shmemPtr);
@@ -297,6 +299,8 @@ public class IpcSharedMemorySpace implements Closeable {
         lock.writeLock().lock();
 
         try {
+            U.dumpStack(log, "Free [tok=" + tokFileName + ", ptr=" + shmemPtr + ", force=" + force + ']');
+
             IpcSharedMemoryUtils.freeSystemResources(tokFileName, shmemPtr, force);
         }
         finally {
