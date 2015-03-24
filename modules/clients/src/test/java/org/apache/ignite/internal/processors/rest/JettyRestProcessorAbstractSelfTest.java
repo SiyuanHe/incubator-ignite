@@ -73,6 +73,8 @@ abstract class JettyRestProcessorAbstractSelfTest extends AbstractRestProcessorS
         for (Map.Entry<String, String> e : params.entrySet())
             addr += e.getKey() + '=' + e.getValue() + '&';
 
+        System.out.println("addr=" + addr);
+        
         URL url = new URL(addr);
         
         log.info("Inside content 2");
@@ -85,9 +87,8 @@ abstract class JettyRestProcessorAbstractSelfTest extends AbstractRestProcessorS
         
         log.info("Inside content 4");
 
-        if (signature != null) {
+        if (signature != null)
             conn.setRequestProperty("X-Signature", signature);
-        }
 
         log.info("Inside content 5");
 
