@@ -48,8 +48,8 @@ public class IgniteClientTestSuite extends TestSuite {
         suite.addTest(new TestSuite(RestBinaryProtocolSelfTest.class));
 
         // Test jetty rest processor
-        suite.addTest(new TestSuite(JettyRestProcessorSignedSelfTest.class));
-        suite.addTest(new TestSuite(JettyRestProcessorUnsignedSelfTest.class));
+//        suite.addTest(new TestSuite(JettyRestProcessorSignedSelfTest.class));
+//        suite.addTest(new TestSuite(JettyRestProcessorUnsignedSelfTest.class));
 
         // Test TCP rest processor with original memcache client.
         suite.addTest(new TestSuite(ClientMemcachedProtocolSelfTest.class));
