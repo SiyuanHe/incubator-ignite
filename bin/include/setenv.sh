@@ -23,7 +23,7 @@
 #       . "${IGNITE_HOME}"/bin/include/setenv.sh
 # in other scripts to set classpath using exported IGNITE_LIBS variable.
 #
-echo "here set env"
+
 #
 # Check IGNITE_HOME.
 #
@@ -68,7 +68,6 @@ do
         do
             if [ -f ${more_file} ]; then
                 IGNITE_LIBS=${IGNITE_LIBS}${SEP}${more_file}
-                echo "more_file:"${more_file}
             fi
         done
 
