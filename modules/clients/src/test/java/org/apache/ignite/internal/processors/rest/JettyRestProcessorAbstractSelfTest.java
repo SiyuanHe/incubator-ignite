@@ -276,17 +276,28 @@ abstract class JettyRestProcessorAbstractSelfTest extends AbstractRestProcessorS
      * @throws Exception If failed.
      */
     public void testAdd() throws Exception {
+        log.info("Start testAdd");
+        
         jcache().put("addKey1", "addVal1");
+        
+        log.info("testAdd step 1");
 
         String ret = content(F.asMap("cmd", "add", "key", "addKey2", "val", "addVal2"));
+        
+        log.info("testAdd step 2");
 
         assertNotNull(ret);
         assertTrue(!ret.isEmpty());
+        
+        log.info("testAdd step 3");
 
         jsonEquals(ret, cachePattern(true, true));
+        
+        log.info("testAdd step 4");
 
         assertEquals("addVal1", jcache().localPeek("addKey1", CachePeekMode.ONHEAP));
         assertEquals("addVal2", jcache().localPeek("addKey2", CachePeekMode.ONHEAP));
+        log.info("End testAdd");
     }
 
     /**
