@@ -502,6 +502,9 @@ public class IpcSharedMemoryServerEndpoint implements IpcServerEndpoint {
      *
      */
     private class GcWorker extends GridWorker {
+        /** */
+        private boolean lastRunDone;
+
         /**
          * @param gridName Grid name.
          * @param name Name.
@@ -520,8 +523,13 @@ public class IpcSharedMemoryServerEndpoint implements IpcServerEndpoint {
 
             assert workTokDir != null;
 
-            while (!isCancelled()) {
-                U.sleep(GC_FREQ);
+            while (!lastRunDone) {
+                try {
+                    U.sleep(GC_FREQ);
+                }
+                catch (IgniteInterruptedCheckedException e) {
+                    // No-op.
+                }
 
                 if (log.isDebugEnabled())
                     log.debug("Starting GC iteration.");
@@ -542,6 +550,12 @@ public class IpcSharedMemoryServerEndpoint implements IpcServerEndpoint {
                         if (log.isDebugEnabled())
                             log.debug("Removed endpoint: " + e);
                     }
+                }
+
+                if (isCancelled()) {
+                    lastRunDone = true;
+
+                    break;
                 }
             }
         }

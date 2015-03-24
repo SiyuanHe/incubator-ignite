@@ -245,7 +245,7 @@ public class IpcSharedMemoryUtils {
     }
 
     /**
-     * @param workTokDir Work token directory.
+     * @param workTokDir Token directory (common for multiple nodes).
      * @param tokDir Current node token directory.
      * @param log Logger.
      */
@@ -279,6 +279,8 @@ public class IpcSharedMemoryUtils {
 
     /**
      * @param workTokDir Token directory (common for multiple nodes).
+     * @param tokDir Current node token directory.
+     * @param log Logger.
      */
     private static void processTokenDirectory(File workTokDir, File tokDir, IgniteLogger log) {
         for (File f : workTokDir.listFiles()) {

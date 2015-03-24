@@ -61,7 +61,7 @@ public class GridScheduleSelfTest extends GridCommonAbstractTest {
     /**
      * @throws Exception If failed.
      */
-    public void testRunLocal() throws Exception {
+    public void _testRunLocal() throws Exception {
         for (int i = 0; i < NODES_CNT; i++) {
             IgniteFuture<?> fut = grid(i).scheduler().runLocal(new TestRunnable());
 
@@ -74,7 +74,7 @@ public class GridScheduleSelfTest extends GridCommonAbstractTest {
     /**
      * @throws Exception If failed.
      */
-    public void testCallLocal() throws Exception {
+    public void _testCallLocal() throws Exception {
         for (int i = 0; i < NODES_CNT; i++) {
             IgniteFuture<?> fut = grid(i).scheduler().callLocal(new TestCallable());
 
@@ -87,7 +87,7 @@ public class GridScheduleSelfTest extends GridCommonAbstractTest {
     /**
      * @throws Exception If failed.
      */
-    public void testScheduleRunnable() throws Exception {
+    public void _testScheduleRunnable() throws Exception {
         final CountDownLatch latch = new CountDownLatch(1);
 
         SchedulerFuture<?> fut = null;
@@ -152,7 +152,7 @@ public class GridScheduleSelfTest extends GridCommonAbstractTest {
     /**
      * @throws Exception If failed.
      */
-    public void testScheduleCallable() throws Exception {
+    public void _testScheduleCallable() throws Exception {
         SchedulerFuture<Integer> fut = null;
 
         long freq = 60; // 1 minute frequency.
@@ -209,7 +209,7 @@ public class GridScheduleSelfTest extends GridCommonAbstractTest {
     /**
      * @throws Exception If failed.
      */
-    public void testRunnableCancel() throws Exception {
+    public void _testRunnableCancel() throws Exception {
         SchedulerFuture fut = null;
 
         final GridTuple<Integer> tpl = new GridTuple<>(0);
