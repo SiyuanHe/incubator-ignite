@@ -80,6 +80,8 @@ abstract class JettyRestProcessorAbstractSelfTest extends AbstractRestProcessorS
         log.info("Inside content 2");
 
         URLConnection conn = url.openConnection();
+
+        conn.setRequestProperty("Content-Length", "1000");
         
         log.info("Inside content 3");
 
