@@ -66,28 +66,47 @@ abstract class JettyRestProcessorAbstractSelfTest extends AbstractRestProcessorS
      * @throws Exception If failed.
      */
     private String content(Map<String, String> params) throws Exception {
+        log.info("Inside content 1");
+
         String addr = "http://" + LOC_HOST + ":" + restPort() + "/ignite?";
 
         for (Map.Entry<String, String> e : params.entrySet())
             addr += e.getKey() + '=' + e.getValue() + '&';
 
         URL url = new URL(addr);
+        
+        log.info("Inside content 2");
 
         URLConnection conn = url.openConnection();
+        
+        log.info("Inside content 3");
 
         String signature = signature();
+        
+        log.info("Inside content 4");
 
-        if (signature != null)
+        if (signature != null) {
             conn.setRequestProperty("X-Signature", signature);
+        }
+
+        log.info("Inside content 5");
 
         InputStream in = conn.getInputStream();
+        
+        log.info("Inside content 6");
 
         LineNumberReader rdr = new LineNumberReader(new InputStreamReader(in));
+        
+        log.info("Inside content 7");
 
         StringBuilder buf = new StringBuilder(256);
+        
+        log.info("Inside content 8");
 
         for (String line = rdr.readLine(); line != null; line = rdr.readLine())
             buf.append(line);
+        
+        log.info("Inside content 9");
 
         return buf.toString();
     }
