@@ -80,8 +80,6 @@ abstract class JettyRestProcessorAbstractSelfTest extends AbstractRestProcessorS
         log.info("Inside content 2");
 
         URLConnection conn = url.openConnection();
-
-        conn.setRequestProperty("Content-Length", "1000");
         
         log.info("Inside content 3");
 
@@ -91,6 +89,11 @@ abstract class JettyRestProcessorAbstractSelfTest extends AbstractRestProcessorS
 
         if (signature != null)
             conn.setRequestProperty("X-Signature", signature);
+
+        conn.setRequestProperty("Content-Length", "1000");
+        conn.setRequestProperty("Connection", "close");
+        System.setProperty("java.net.preferIPv4Stack" , "true");
+        conn.setReadTimeout(2 * 60 * 1000);// 2 min.
 
         log.info("Inside content 5");
 
