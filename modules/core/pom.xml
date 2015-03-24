@@ -31,7 +31,7 @@
     </parent>
 
     <artifactId>ignite-core</artifactId>
-    <version>1.0.0-RELEASE-TEST-SNAPSHOT</version>
+    <version>1.0.1-RELEASE-TEST-SNAPSHOT</version>
 
     <dependencies>
         <dependency>
@@ -421,8 +421,4 @@
             </build>
         </profile>
     </profiles>
-
-  <scm>
-    <tag>ignite-release-test-i-1-branch</tag>
-  </scm>
 </project>

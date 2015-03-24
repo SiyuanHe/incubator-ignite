@@ -31,13 +31,13 @@
     </parent>
 
     <artifactId>ignite-schema-import</artifactId>
-    <version>1.0.0-RELEASE-TEST-SNAPSHOT</version>
+    <version>1.0.1-RELEASE-TEST-SNAPSHOT</version>
 
     <dependencies>
         <dependency>
             <groupId>org.apache.ignite</groupId>
             <artifactId>ignite-core</artifactId>
-            <version>1.0.0-RELEASE-TEST-SNAPSHOT</version>
+            <version>1.0.1-RELEASE-TEST-SNAPSHOT</version>
         </dependency>
 
         <dependency>
@@ -99,8 +99,4 @@
             </dependencies>
         </profile>
     </profiles>
-
-  <scm>
-    <tag>ignite-release-test-i-1-branch</tag>
-  </scm>
 </project>
