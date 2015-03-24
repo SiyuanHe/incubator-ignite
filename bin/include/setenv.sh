@@ -23,7 +23,7 @@
 #       . "${IGNITE_HOME}"/bin/include/setenv.sh
 # in other scripts to set classpath using exported IGNITE_LIBS variable.
 #
-
+echo "here set env"
 #
 # Check IGNITE_HOME.
 #
@@ -58,14 +58,31 @@ IGNITE_LIBS="${IGNITE_HOME}/libs/*"
 
 for file in ${IGNITE_HOME}/libs/*
 do
+    echo "file:"${file}
+    if [ -f ${file} ]; then
+        IGNITE_LIBS=${IGNITE_LIBS}${SEP}${file}
+    fi
+
     if [ -d ${file} ] && [ "${file}" != "${IGNITE_HOME}"/libs/optional ]; then
-        IGNITE_LIBS=${IGNITE_LIBS}${SEP}${file}/*
+        for more_file in ${file}/*.jar
+        do
+            if [ -f ${more_file} ]; then
+                IGNITE_LIBS=${IGNITE_LIBS}${SEP}${more_file}
+                echo "more_file:"${more_file}
+            fi
+        done
+
     fi
 
     if [ -d ${file} ] && [ "${file}" == "${IGNITE_HOME}"/libs/ignite-hadoop ]; then
         HADOOP_EDITION=1
     fi
 done
+
+#add example jar
+IGNITE_EXAMPLE_JAR=${IGNITE_HOME}/examples/target/ignite-examples-1.0.0-RC3-SNAPSHOT.jar
+IGNITE_LIBS=${IGNITE_LIBS}${SEP}${IGNITE_EXAMPLE_JAR}
+echo "IGNITE_LIBS:"${IGNITE_LIBS}
 
 if [ "${USER_LIBS}" != "" ]; then
     IGNITE_LIBS=${USER_LIBS}${SEP}${IGNITE_LIBS}
