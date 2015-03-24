@@ -33,7 +33,6 @@ import org.jetbrains.annotations.*;
 
 import java.io.*;
 import java.net.*;
-import java.nio.channels.*;
 import java.util.*;
 import java.util.concurrent.atomic.*;
 
@@ -66,9 +65,6 @@ public class IpcSharedMemoryServerEndpoint implements IpcServerEndpoint {
      * PID]/gg-shmem-space-[auto_idx]-[other_party_pid]-[size]
      */
     public static final String TOKEN_FILE_NAME = "gg-shmem-space-";
-
-    /** Default lock file name. */
-    private static final String LOCK_FILE_NAME = "lock.file";
 
     /** GC frequency. */
     private static final long GC_FREQ = 10000;
@@ -530,31 +526,7 @@ public class IpcSharedMemoryServerEndpoint implements IpcServerEndpoint {
                 if (log.isDebugEnabled())
                     log.debug("Starting GC iteration.");
 
-                RandomAccessFile lockFile = null;
-
-                FileLock lock = null;
-
-                try {
-                    lockFile = new RandomAccessFile(new File(workTokDir, LOCK_FILE_NAME), "rw");
-
-                    lock = lockFile.getChannel().lock();
-
-                    if (lock != null)
-                        processTokenDirectory(workTokDir);
-                    else if (log.isDebugEnabled())
-                        log.debug("Token directory is being processed concurrently: " + workTokDir.getAbsolutePath());
-                }
-                catch (OverlappingFileLockException ignored) {
-                    if (log.isDebugEnabled())
-                        log.debug("Token directory is being processed concurrently: " + workTokDir.getAbsolutePath());
-                }
-                catch (IOException e) {
-                    U.error(log, "Failed to process directory: " + workTokDir.getAbsolutePath(), e);
-                }
-                finally {
-                    U.releaseQuiet(lock);
-                    U.closeQuiet(lockFile);
-                }
+                IpcSharedMemoryUtils.cleanResources(workTokDir, tokDir, log);
 
                 // Process spaces created by this endpoint.
                 if (log.isDebugEnabled())
@@ -569,135 +541,6 @@ public class IpcSharedMemoryServerEndpoint implements IpcServerEndpoint {
 
                         if (log.isDebugEnabled())
                             log.debug("Removed endpoint: " + e);
-                    }
-                }
-            }
-        }
-
-        /** @param workTokDir Token directory (common for multiple nodes). */
-        private void processTokenDirectory(File workTokDir) {
-            for (File f : workTokDir.listFiles()) {
-                if (!f.isDirectory()) {
-                    if (!f.getName().equals(LOCK_FILE_NAME)) {
-                        if (log.isDebugEnabled())
-                            log.debug("Unexpected file: " + f.getName());
-                    }
-
-                    continue;
-                }
-
-                if (f.equals(tokDir)) {
-                    if (log.isDebugEnabled())
-                        log.debug("Skipping own token directory: " + tokDir.getName());
-
-                    continue;
-                }
-
-                String name = f.getName();
-
-                int pid;
-
-                try {
-                    pid = Integer.parseInt(name.substring(name.lastIndexOf('-') + 1));
-                }
-                catch (NumberFormatException ignored) {
-                    if (log.isDebugEnabled())
-                        log.debug("Failed to parse file name: " + name);
-
-                    continue;
-                }
-
-                // Is process alive?
-                if (IpcSharedMemoryUtils.alive(pid)) {
-                    if (log.isDebugEnabled())
-                        log.debug("Skipping alive node: " + pid);
-
-                    continue;
-                }
-
-                if (log.isDebugEnabled())
-                    log.debug("Possibly stale token folder: " + f);
-
-                // Process each token under stale token folder.
-                File[] shmemToks = f.listFiles();
-
-                if (shmemToks == null)
-                    // Although this is strange, but is reproducible sometimes on linux.
-                    return;
-
-                int rmvCnt = 0;
-
-                try {
-                    for (File f0 : shmemToks) {
-                        if (log.isDebugEnabled())
-                            log.debug("Processing token file: " + f0.getName());
-
-                        if (f0.isDirectory()) {
-                            if (log.isDebugEnabled())
-                                log.debug("Unexpected directory: " + f0.getName());
-                        }
-
-                        // Token file format: gg-shmem-space-[auto_idx]-[other_party_pid]-[size]
-                        String[] toks = f0.getName().split("-");
-
-                        if (toks.length != 6) {
-                            if (log.isDebugEnabled())
-                                log.debug("Unrecognized token file: " + f0.getName());
-
-                            continue;
-                        }
-
-                        int pid0;
-                        int size;
-
-                        try {
-                            pid0 = Integer.parseInt(toks[4]);
-                            size = Integer.parseInt(toks[5]);
-                        }
-                        catch (NumberFormatException ignored) {
-                            if (log.isDebugEnabled())
-                                log.debug("Failed to parse file name: " + name);
-
-                            continue;
-                        }
-
-                        if (IpcSharedMemoryUtils.alive(pid0)) {
-                            if (log.isDebugEnabled())
-                                log.debug("Skipping alive process: " + pid0);
-
-                            continue;
-                        }
-
-                        if (log.isDebugEnabled())
-                            log.debug("Possibly stale token file: " + f0);
-
-                        U.dumpStack(log, "Free [tok=" + f0.getAbsolutePath() + ']');
-
-                        IpcSharedMemoryUtils.freeSystemResources(f0.getAbsolutePath(), size);
-
-                        if (f0.delete()) {
-                            if (log.isDebugEnabled())
-                                log.debug("Deleted file: " + f0.getName());
-
-                            rmvCnt++;
-                        }
-                        else if (!f0.exists()) {
-                            if (log.isDebugEnabled())
-                                log.debug("File has been concurrently deleted: " + f0.getName());
-
-                            rmvCnt++;
-                        }
-                        else if (log.isDebugEnabled())
-                            log.debug("Failed to delete file: " + f0.getName());
-                    }
-                }
-                finally {
-                    // Assuming that no new files can appear, since
-                    if (rmvCnt == shmemToks.length) {
-                        U.delete(f);
-
-                        if (log.isDebugEnabled())
-                            log.debug("Deleted empty token directory: " + f.getName());
                     }
                 }
             }

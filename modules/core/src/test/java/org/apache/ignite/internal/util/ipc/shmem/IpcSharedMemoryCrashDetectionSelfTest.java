@@ -86,6 +86,9 @@ public class IpcSharedMemoryCrashDetectionSelfTest extends GridCommonAbstractTes
         }
         finally {
             srv.close();
+
+            IpcSharedMemoryUtils.cleanResources(U.resolveWorkDirectory(
+                srv.getTokenDirectoryPath(), false).getParentFile(), null, log);
         }
     }
 
