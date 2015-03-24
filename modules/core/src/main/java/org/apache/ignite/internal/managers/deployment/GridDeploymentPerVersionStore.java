@@ -29,8 +29,8 @@ import org.apache.ignite.internal.util.typedef.internal.*;
 import org.apache.ignite.lang.*;
 import org.apache.ignite.marshaller.optimized.*;
 import org.apache.ignite.spi.deployment.*;
-import org.jdk8.backport.*;
 import org.jetbrains.annotations.*;
+import org.jsr166.*;
 
 import java.io.*;
 import java.util.*;
@@ -1257,7 +1257,6 @@ public class GridDeploymentPerVersionStore extends GridDeploymentStoreAdapter {
                 ClassLoader ldr = classLoader();
 
                 ctx.cache().onUndeployed(ldr);
-                ctx.stream().onUndeployed(ldr);
 
                 // Clear optimized marshaller's cache.
                 if (ctx.config().getMarshaller() instanceof OptimizedMarshaller)

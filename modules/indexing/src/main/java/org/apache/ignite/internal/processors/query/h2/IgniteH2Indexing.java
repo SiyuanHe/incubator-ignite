@@ -23,6 +23,7 @@ import org.apache.ignite.cache.query.*;
 import org.apache.ignite.cache.query.annotations.*;
 import org.apache.ignite.configuration.*;
 import org.apache.ignite.internal.*;
+import org.apache.ignite.internal.processors.affinity.*;
 import org.apache.ignite.internal.processors.cache.*;
 import org.apache.ignite.internal.processors.cache.CacheObject;
 import org.apache.ignite.internal.processors.cache.query.*;
@@ -53,8 +54,8 @@ import org.h2.table.*;
 import org.h2.tools.*;
 import org.h2.util.*;
 import org.h2.value.*;
-import org.jdk8.backport.*;
 import org.jetbrains.annotations.*;
+import org.jsr166.*;
 
 import javax.cache.Cache;
 import javax.cache.*;
@@ -242,6 +243,19 @@ public class IgniteH2Indexing implements GridQueryIndexing {
 
         if (log.isDebugEnabled())
             log.debug("Created H2 schema for index database: " + schema);
+    }
+
+    /**
+     * Creates DB schema if it has not been created yet.
+     *
+     * @param schema Schema name.
+     * @throws IgniteCheckedException If failed to create db schema.
+     */
+    private void dropSchema(String schema) throws IgniteCheckedException {
+        executeStatement("INFORMATION_SCHEMA", "DROP SCHEMA IF EXISTS \"" + schema + '"');
+
+        if (log.isDebugEnabled())
+            log.debug("Dropped H2 schema for index database: " + schema);
     }
 
     /**
@@ -694,29 +708,36 @@ public class IgniteH2Indexing implements GridQueryIndexing {
     }
 
     /** {@inheritDoc} */
-    @Override public QueryCursor<List<?>> queryTwoStep(String space, GridCacheTwoStepQuery qry) {
-        return rdcQryExec.query(space, qry);
+    @Override public QueryCursor<List<?>> queryTwoStep(GridCacheContext<?,?> cctx, GridCacheTwoStepQuery qry) {
+        return rdcQryExec.query(cctx, qry);
     }
 
     /** {@inheritDoc} */
     @SuppressWarnings("unchecked")
-    @Override public <K, V> QueryCursor<Cache.Entry<K,V>> queryTwoStep(String space, String type, String sqlQry,
-        Object[] params) {
+    @Override public <K, V> QueryCursor<Cache.Entry<K,V>> queryTwoStep(GridCacheContext<?,?> cctx, SqlQuery qry) {
+        String type = qry.getType();
+        String space = cctx.name();
+
         TableDescriptor tblDesc = tableDescriptor(type, space);
 
         if (tblDesc == null)
             throw new CacheException("Failed to find SQL table for type: " + type);
 
-        String qry;
+        String sql;
 
         try {
-            qry = generateQuery(sqlQry, tblDesc);
+            sql = generateQuery(qry.getSql(), tblDesc);
         }
         catch (IgniteCheckedException e) {
             throw new IgniteException(e);
         }
 
-        final QueryCursor<List<?>> res = queryTwoStep(space, qry, params);
+        SqlFieldsQuery fqry = new SqlFieldsQuery(sql);
+
+        fqry.setArgs(qry.getArgs());
+        fqry.setPageSize(qry.getPageSize());
+
+        final QueryCursor<List<?>> res = queryTwoStep(cctx, fqry);
 
         final Iterator<List<?>> iter0 = res.iterator();
 
@@ -744,7 +765,10 @@ public class IgniteH2Indexing implements GridQueryIndexing {
     }
 
     /** {@inheritDoc} */
-    @Override public QueryCursor<List<?>> queryTwoStep(String space, String sqlQry, Object[] params) {
+    @Override public QueryCursor<List<?>> queryTwoStep(GridCacheContext<?,?> cctx, SqlFieldsQuery qry) {
+        String space = cctx.name();
+        String sqlQry = qry.getSql();
+
         Connection c = connectionForSpace(space);
 
         PreparedStatement stmt;
@@ -760,7 +784,7 @@ public class IgniteH2Indexing implements GridQueryIndexing {
         Collection<GridQueryFieldMetadata> meta;
 
         try {
-            twoStepQry = GridSqlQuerySplitter.split((JdbcPreparedStatement)stmt, params);
+            twoStepQry = GridSqlQuerySplitter.split((JdbcPreparedStatement)stmt, qry.getArgs());
 
             meta = meta(stmt.getMetaData());
         }
@@ -774,7 +798,9 @@ public class IgniteH2Indexing implements GridQueryIndexing {
         if (log.isDebugEnabled())
             log.debug("Parsed query: `" + sqlQry + "` into two step query: " + twoStepQry);
 
-        QueryCursorImpl<List<?>> cursor = (QueryCursorImpl<List<?>>)queryTwoStep(space, twoStepQry);
+        twoStepQry.pageSize(qry.getPageSize());
+
+        QueryCursorImpl<List<?>> cursor = (QueryCursorImpl<List<?>>)queryTwoStep(cctx, twoStepQry);
 
         cursor.fieldsMeta(meta);
 
@@ -1208,7 +1234,7 @@ public class IgniteH2Indexing implements GridQueryIndexing {
     }
 
     /** {@inheritDoc} */
-    public void registerCache(CacheConfiguration<?,?> ccfg) throws IgniteCheckedException {
+    @Override public void registerCache(CacheConfiguration<?,?> ccfg) throws IgniteCheckedException {
         String schema = schema(ccfg.getName());
 
         if (schemas.putIfAbsent(schema, new Schema(ccfg.getName(),
@@ -1218,6 +1244,21 @@ public class IgniteH2Indexing implements GridQueryIndexing {
 
         createSchema(schema);
         createSqlFunctions(schema, ccfg.getSqlFunctionClasses());
+    }
+
+    @Override public void unregisterCache(CacheConfiguration<?, ?> ccfg) {
+        String schema = schema(ccfg.getName());
+
+        Schema rmv = schemas.remove(schema);
+
+        if (rmv != null) {
+            try {
+                dropSchema(schema);
+            }
+            catch (IgniteCheckedException e) {
+                U.error(log, "Failed to drop schema on cache stop (will ignore): " + ccfg.getName(), e);
+            }
+        }
     }
 
     /** {@inheritDoc} */
@@ -1231,7 +1272,8 @@ public class IgniteH2Indexing implements GridQueryIndexing {
 
                 return new IgniteBiPredicate<K, V>() {
                     @Override public boolean apply(K k, V v) {
-                        return cache.context().affinity().primary(ctx.discovery().localNode(), k, -1);
+                        return cache.context().affinity().primary(ctx.discovery().localNode(), k,
+                            AffinityTopologyVersion.NONE);
                     }
                 };
             }

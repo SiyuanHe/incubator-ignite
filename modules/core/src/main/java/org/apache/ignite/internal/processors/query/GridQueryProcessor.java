@@ -36,8 +36,8 @@ import org.apache.ignite.internal.util.typedef.internal.*;
 import org.apache.ignite.internal.util.worker.*;
 import org.apache.ignite.lang.*;
 import org.apache.ignite.spi.indexing.*;
-import org.jdk8.backport.*;
 import org.jetbrains.annotations.*;
+import org.jsr166.*;
 
 import javax.cache.*;
 import java.lang.reflect.*;
@@ -98,9 +98,6 @@ public class GridQueryProcessor extends GridProcessorAdapter {
             execSvc = ctx.getExecutorService();
 
             idx.start(ctx);
-
-            for (CacheConfiguration<?, ?> ccfg : ctx.config().getCacheConfiguration())
-                initializeCache(ccfg);
         }
     }
 
@@ -204,6 +201,58 @@ public class GridQueryProcessor extends GridProcessorAdapter {
 
         if (idx != null)
             idx.stop();
+    }
+
+    /**
+     * @param cctx Cache context.
+     * @throws IgniteCheckedException If failed.
+     */
+    public void onCacheStart(GridCacheContext cctx) throws IgniteCheckedException {
+        if (idx == null)
+            return;
+
+        if (!busyLock.enterBusy())
+            return;
+
+        try {
+            initializeCache(cctx.config());
+        }
+        finally {
+            busyLock.leaveBusy();
+        }
+    }
+
+    /**
+     * @param cctx Cache context.
+     */
+    public void onCacheStop(GridCacheContext cctx) {
+        if (idx == null)
+            return;
+
+        if (!busyLock.enterBusy())
+            return;
+
+        try {
+            idx.unregisterCache(cctx.config());
+
+            Iterator<Map.Entry<TypeId, TypeDescriptor>> it = types.entrySet().iterator();
+
+            while (it.hasNext()) {
+                Map.Entry<TypeId, TypeDescriptor> entry = it.next();
+
+                if (F.eq(cctx.name(), entry.getKey().space)) {
+                    it.remove();
+
+                    typesByName.remove(new TypeName(cctx.name(), entry.getValue().name()));
+                }
+            }
+        }
+        catch (IgniteCheckedException e) {
+            U.error(log, "Failed to clear indexing on cache stop (will ignore): " + cctx.name(), e);
+        }
+        finally {
+            busyLock.leaveBusy();
+        }
     }
 
     /**
@@ -368,7 +417,7 @@ public class GridQueryProcessor extends GridProcessorAdapter {
             if (desc == null || !desc.registered())
                 return;
 
-            if (!desc.valueClass().equals(valCls))
+            if (!desc.valueClass().isAssignableFrom(valCls))
                 throw new IgniteCheckedException("Failed to update index due to class name conflict" +
                     "(multiple classes with same simple name are stored in the same cache) " +
                     "[expCls=" + desc.valueClass().getName() + ", actualCls=" + valCls.getName() + ']');
@@ -433,7 +482,7 @@ public class GridQueryProcessor extends GridProcessorAdapter {
             throw new IllegalStateException("Failed to execute query (grid is stopping).");
 
         try {
-            return idx.queryTwoStep(space, qry);
+            return idx.queryTwoStep(ctx.cache().internalCache(space).context(), qry);
         }
         finally {
             busyLock.leaveBusy();
@@ -441,17 +490,16 @@ public class GridQueryProcessor extends GridProcessorAdapter {
     }
 
     /**
-     * @param space Space.
-     * @param sqlQry Query.
-     * @param params Parameters.
+     * @param cctx Cache context.
+     * @param qry Query.
      * @return Cursor.
      */
-    public QueryCursor<List<?>> queryTwoStep(String space, String sqlQry, Object[] params) {
+    public QueryCursor<List<?>> queryTwoStep(GridCacheContext<?,?> cctx, SqlFieldsQuery qry) {
         if (!busyLock.enterBusy())
             throw new IllegalStateException("Failed to execute query (grid is stopping).");
 
         try {
-            return idx.queryTwoStep(space, sqlQry, params);
+            return idx.queryTwoStep(cctx, qry);
         }
         finally {
             busyLock.leaveBusy();
@@ -459,18 +507,16 @@ public class GridQueryProcessor extends GridProcessorAdapter {
     }
 
     /**
-     * @param space Space.
-     * @param type Type.
-     * @param sqlQry Query.
-     * @param params Parameters.
+     * @param cctx Cache context.
+     * @param qry Query.
      * @return Cursor.
      */
-    public <K,V> QueryCursor<Cache.Entry<K,V>> queryTwoStep(String space, String type, String sqlQry, Object[] params) {
+    public <K,V> QueryCursor<Cache.Entry<K,V>> queryTwoStep(GridCacheContext<?,?> cctx, SqlQuery qry) {
         if (!busyLock.enterBusy())
             throw new IllegalStateException("Failed to execute query (grid is stopping).");
 
         try {
-            return idx.queryTwoStep(space, type, sqlQry, params);
+            return idx.queryTwoStep(cctx, qry);
         }
         finally {
             busyLock.leaveBusy();
@@ -478,17 +524,20 @@ public class GridQueryProcessor extends GridProcessorAdapter {
     }
 
     /**
-     * @param space Space.
-     * @param type Type.
-     * @param sqlQry Query.
-     * @param params Parameters.
+     * @param cctx Cache context.
+     * @param qry Query.
      * @return Cursor.
      */
-    public <K,V> Iterator<Cache.Entry<K,V>> queryLocal(String space, String type, String sqlQry, Object[] params) {
+    public <K,V> Iterator<Cache.Entry<K,V>> queryLocal(GridCacheContext<?,?> cctx, SqlQuery qry) {
         if (!busyLock.enterBusy())
             throw new IllegalStateException("Failed to execute query (grid is stopping).");
 
         try {
+            String space = cctx.name();
+            String type = qry.getType();
+            String sqlQry = qry.getSql();
+            Object[] params = qry.getArgs();
+
             TypeDescriptor typeDesc = typesByName.get(new TypeName(space, type));
 
             if (typeDesc == null || !typeDesc.registered())
@@ -549,16 +598,19 @@ public class GridQueryProcessor extends GridProcessorAdapter {
     }
 
     /**
-     * @param space Space.
-     * @param sql SQL Query.
-     * @param args Arguments.
+     * @param cctx Cache context.
+     * @param qry Query.
      * @return Iterator.
      */
-    public QueryCursor<List<?>> queryLocalFields(String space, String sql, Object[] args) {
+    public QueryCursor<List<?>> queryLocalFields(GridCacheContext<?,?> cctx, SqlFieldsQuery qry) {
         if (!busyLock.enterBusy())
             throw new IllegalStateException("Failed to execute query (grid is stopping).");
 
         try {
+            String space = cctx.name();
+            String sql = qry.getSql();
+            Object[] args = qry.getArgs();
+
             GridQueryFieldsResult res = idx.queryFields(space, sql, F.asList(args), idx.backupFilter());
 
             if (ctx.event().isRecordable(EVT_CACHE_QUERY_EXECUTED)) {
@@ -577,7 +629,8 @@ public class GridQueryProcessor extends GridProcessorAdapter {
                         null));
             }
 
-            QueryCursorImpl<List<?>> cursor = new QueryCursorImpl<>(res.iterator());
+            QueryCursorImpl<List<?>> cursor = new QueryCursorImpl<>(
+                new GridQueryCacheObjectsIterator(res.iterator(), cctx, cctx.keepPortable()));
 
             cursor.fieldsMeta(res.metaData());
 
@@ -1057,6 +1110,16 @@ public class GridQueryProcessor extends GridProcessorAdapter {
                 d.addProperty(prop, false);
         }
 
+        if (F.isEmpty(meta.getValueType()))
+            throw new IgniteCheckedException("Value type is not set: " + meta);
+
+        Class<?> valCls = U.classForName(meta.getValueType(), null);
+
+        d.name(valCls != null ? typeName(valCls) : meta.getValueType());
+
+        d.valueClass(valCls != null ? valCls : Object.class);
+        d.keyClass(meta.getKeyType() == null ? Object.class : U.classForName(meta.getKeyType(), Object.class));
+
         return d;
     }
 
@@ -1364,8 +1427,8 @@ public class GridQueryProcessor extends GridProcessorAdapter {
             else {
                 int isKeyProp0 = isKeyProp;
 
-                if (isKeyProp0 == 0) {
-                    if (ctx.cacheObjects().hasField(key, propName))
+                if (isKeyProp0 == 0) { // Key is allowed to be a non-portable object here.
+                    if (ctx.cacheObjects().isPortableObject(key) && ctx.cacheObjects().hasField(key, propName))
                         isKeyProp = isKeyProp0 = 1;
                     else if (ctx.cacheObjects().hasField(val, propName))
                         isKeyProp = isKeyProp0 = -1;
